@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Local Gradle properties (contains credentials)
+gradle.properties
+
+# IDE files
+.idea/
+*.iml
+.DS_Store
+
+# Logs
+*.log
+
+# Misc
+/local.properties
