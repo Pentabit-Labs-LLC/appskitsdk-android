@@ -11,5 +11,5 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.TalhaChaudhry:aks-dist:1.0.4")
+    implementation("com.github.TalhaChaudhry:aks-dist:1.0.5")
 }

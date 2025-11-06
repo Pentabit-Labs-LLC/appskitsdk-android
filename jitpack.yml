@@ -1,2 +1,6 @@
 jdk:
   - openjdk17
+
+build:
+  script:
+    - ./gradlew :aks:publishToMavenLocal

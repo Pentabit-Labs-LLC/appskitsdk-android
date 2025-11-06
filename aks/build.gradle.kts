@@ -1,46 +1,30 @@
 plugins {
-    id("com.android.library")
     id("maven-publish")
 }
 
-android {
-    namespace = "com.pentabit.aksdist"
-    compileSdk = 34
-
-    defaultConfig {
-        minSdk = 21
-    }
-
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-        }
-    }
-
-    publishing {
-        singleVariant("release")
-    }
+repositories {
+    google()
+    mavenCentral()
 }
 
-afterEvaluate {
-    publishing {
-        publications {
-            create<MavenPublication>("release") {
-                from(components["release"])
-                groupId = "com.github.TalhaChaudhry"
-                artifactId = "aks-dist"
-                version = "1.0.1"
-            }
+publishing {
+    publications {
+        // Publish first AAR
+        create<MavenPublication>("core") {
+            groupId = "com.github.TalhaChaudhry"
+            artifactId = "AppsKitSDK"
+            version = "1.0.5"
+
+            artifact("$projectDir/libs/AppsKitSDK_v5000.aar")
         }
-    }
 
-    // Include your .aar files
-    val aarFiles = file("$projectDir/libs").listFiles { _, name ->
-        name.endsWith(".aar")
-    } ?: emptyArray()
+        // Publish second AAR
+        create<MavenPublication>("support") {
+            groupId = "com.github.TalhaChaudhry"
+            artifactId = "AppsKitSDKSupport"
+            version = "1.0.5"
 
-    aarFiles.forEach { aar ->
-        println("Including AAR: ${aar.name}")
-        artifacts.add("default", aar)
+            artifact("$projectDir/libs/AppsKitSDKSupport_v101.aar")
+        }
     }
 }

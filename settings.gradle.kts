@@ -1,14 +1,2 @@
-pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
-}
-
-dependencyResolutionManagement {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
+rootProject.name = "aks-android-helpers-dist"
+include(":aks")
