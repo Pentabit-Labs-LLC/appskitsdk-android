@@ -1,2 +1,2 @@
-rootProject.name = "aks-android-helpers-dist"
+rootProject.name = "aks-dist"
 include(":aks")

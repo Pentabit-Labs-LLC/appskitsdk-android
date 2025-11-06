@@ -8,8 +8,6 @@ repositories {
 }
 
 subprojects {
-    apply(plugin = "maven-publish")
-
     repositories {
         google()
         mavenCentral()

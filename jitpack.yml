@@ -3,4 +3,4 @@ jdk:
 
 build:
   script:
-    - ./gradlew :aks:publishToMavenLocal
+    - ./gradlew :aks:assemble :aks:publishToMavenLocal
