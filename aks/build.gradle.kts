@@ -1,5 +1,6 @@
 plugins {
     id("com.android.library")
+    id("maven-publish")
 }
 
 android {
@@ -21,12 +22,19 @@ android {
     }
 }
 
-dependencies {
-    // You can add any dependencies here if needed
-}
-
-// Include both AARs in the final output
 afterEvaluate {
+    publishing {
+        publications {
+            create<MavenPublication>("release") {
+                from(components["release"])
+                groupId = "com.github.TalhaChaudhry"
+                artifactId = "aks-dist"
+                version = "1.0.1"
+            }
+        }
+    }
+
+    // Include your .aar files
     val aarFiles = file("$projectDir/libs").listFiles { _, name ->
         name.endsWith(".aar")
     } ?: emptyArray()
