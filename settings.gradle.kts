@@ -1,2 +1,2 @@
-rootProject.name = "aks-dist"
+rootProject.name = "appskitsdk-android"
 include(":aks")

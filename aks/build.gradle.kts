@@ -19,16 +19,16 @@ tasks.register("assemble") {
 publishing {
     publications {
         create<MavenPublication>("AppsKitSDK") {
-            groupId = "com.github.TalhaChaudhry"
-            artifactId = "AppsKitSDK"
-            version = "1.0.6"
+            groupId = "com.github.Pentabit-Labs-LLC"
+            artifactId = "AppsKitSDK-core"
+            version = "5.0.0.1"
             artifact("$projectDir/libs/AppsKitSDK_v5000.aar")
         }
 
         create<MavenPublication>("AppsKitSDKSupport") {
-            groupId = "com.github.TalhaChaudhry"
-            artifactId = "AppsKitSDKSupport"
-            version = "1.0.6"
+            groupId = "com.github.Pentabit-Labs-LLC"
+            artifactId = "AppsKitSDK-support"
+            version = "1.0.0.1"
             artifact("$projectDir/libs/AppsKitSDKSupport_v101.aar")
         }
     }

@@ -11,5 +11,5 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.TalhaChaudhry:aks-dist:${LATEST_VERSION}")
+    implementation("com.github.Pentabit-Labs-LLC:appskitsdk-android:${LATEST_VERSION}")
 }
