@@ -1,4 +1,4 @@
-# aks-dist
+# AppsKitSDK-Android
 [![](https://jitpack.io/v/Pentabit-Labs-LLC/appskitsdk-android.svg)](https://jitpack.io/#Pentabit-Labs-LLC/appskitsdk-android)
 
 ## Integration
