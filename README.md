@@ -1,5 +1,5 @@
 # aks-dist
-[![](https://jitpack.io/v/TalhaChaudhry/aks-dist.svg)](https://jitpack.io/#TalhaChaudhry/aks-dist)
+[![](https://jitpack.io/v/Pentabit-Labs-LLC/appskitsdk-android.svg)](https://jitpack.io/#Pentabit-Labs-LLC/appskitsdk-android)
 
 ## Integration
 
