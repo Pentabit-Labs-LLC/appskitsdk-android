@@ -1,5 +1,5 @@
 # aks-dist
-Prebuilt Android SDKs distributed via JitPack.
+[![](https://jitpack.io/v/TalhaChaudhry/aks-dist.svg)](https://jitpack.io/#TalhaChaudhry/aks-dist)
 
 ## Integration
 
