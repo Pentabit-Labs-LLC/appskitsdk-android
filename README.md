@@ -11,5 +11,5 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.TalhaChaudhry:aks-dist:[![](https://jitpack.io/v/TalhaChaudhry/aks-dist.svg)](https://jitpack.io/#TalhaChaudhry/aks-dist)")
+    implementation("com.github.TalhaChaudhry:aks-dist:v${LATEST_VERSION}")
 }
