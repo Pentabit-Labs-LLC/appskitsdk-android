@@ -21,8 +21,8 @@ publishing {
         create<MavenPublication>("AppsKitSDK") {
             groupId = "com.github.Pentabit-Labs-LLC"
             artifactId = "AppsKitSDK-core"
-            version = "6.2.1.2"
-            artifact("$projectDir/libs/AppsKitSDK_v6212.aar")
+            version = "6.3.1.0"
+            artifact("$projectDir/libs/AppsKitSDK_v6310.aar")
         }
 
         create<MavenPublication>("AppsKitSDKSupport") {
