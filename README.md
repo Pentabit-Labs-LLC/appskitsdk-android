@@ -578,7 +578,13 @@ AdsManager.loadNative(activity, placeholder, isShowInScrollView = false, object 
 // frameLayout is the BannerContainer that will host the native ad view; res is an
 // optional custom native-ad layout resource (pass null to use AKS's default layout)
 AdsManager.showNative(activity, frameLayout, placeholder, isShowInScrollView = false, res = null, callback)
+
+// Show the native ad using the design you created for this placeholder in the
+// AKS portal, instead of a layout resource — see below.
+AdsManager.showTemplatedNative(activity, frameLayout, placeholder, isShowInScrollView = false, callback)
 ```
+
+`showTemplatedNative` is for placeholders where the native ad's look was designed and assigned **on the AKS portal** rather than in your app's code — there's no `res` param at all, because the layout isn't yours to supply. AKS resolves which portal template applies to this placeholder, fetches it (cached after the first fetch), and renders the native ad with it through the same load/display pipeline `showNative` uses. If no template is assigned to the placeholder, or it can't be fetched, AKS falls back to its own built-in default native design rather than failing the ad — so it's always safe to call, even before a template has been set up on the portal side.
 
 ### Feature Promotion
 
