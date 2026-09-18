@@ -51,6 +51,14 @@ dependencies {
     implementation("com.russhwolf:multiplatform-settings:1.1.1")
     implementation("com.russhwolf:multiplatform-settings-serialization:1.1.1")
 
+    // SQLDelight — backs AKS's own local analytics database (AksLocalDbManager). It's
+    // referenced directly by AKS's compiled code, and — like every other dependency in this
+    // guide — carries no dependency metadata on the JitPack AAR (bare .pom, no .module), so
+    // omitting it doesn't fail the build, it crashes at runtime the first time
+    // AppsKitSDK.initialize() runs: NoClassDefFoundError: app/cash/sqldelight/Transacter.
+    implementation("app.cash.sqldelight:runtime:2.3.2")
+    implementation("app.cash.sqldelight:android-driver:2.3.2")
+
     // Jetpack Compose — AKS's Feature/Cross-Promotion ad screens, the Configuration
     // Dashboard, and the Test Suite (§10) are all built with Compose. Pull these in via
     // the Compose BOM so versions stay aligned with whatever else in your app uses Compose.
@@ -83,7 +91,7 @@ dependencies {
 
 > Keep the Ktor version consistent across every `ktor-*` artifact — mixing Ktor 2.x and 3.x artifacts on the same classpath causes binary-incompatibility crashes at runtime.
 >
-> Match AKS's coroutines (`1.7.3`), serialization (`1.9.0`), and Firebase BOM (`34.3.0`) versions across the rest of your app too, rather than letting an older version linger elsewhere in your dependency graph. Firebase's BOM has had breaking changes between major versions (`33.x` → `34.x`), and Gradle silently resolving to whichever version "wins" doesn't guarantee the AKS code paths that call into these libraries stay binary-compatible — these are required, not best-effort suggestions.
+> Match AKS's coroutines (`1.7.3`), serialization (`1.9.0`), Firebase BOM (`34.3.0`), and SQLDelight (`2.3.2`) versions across the rest of your app too, rather than letting an older version linger elsewhere in your dependency graph. Firebase's BOM has had breaking changes between major versions (`33.x` → `34.x`), and Gradle silently resolving to whichever version "wins" doesn't guarantee the AKS code paths that call into these libraries stay binary-compatible — these are required, not best-effort suggestions.
 
 ### 1.3 Mobile measurement partner (MMP) SDKs (always needed)
 
@@ -602,6 +610,85 @@ AdsManager.showFeaturePromotion(activity, placeholder, object : OnFeaturePromoti
     override fun onFailToShowFeaturePromotion(errorMessage: String) { }
 })
 ```
+
+### Paywall
+
+Paywall is AKS's other house-hosted format (like Feature Promotion) — the paywall's design, copy, pricing layout, and plans are all configured server-side in the AKS portal against the PAYWALLS ad format, and AKS renders the screen and drives the whole purchase flow itself (pricing, plan selection, the actual Google Play / Amazon purchase, and reporting the result back to you). You never call a billing API directly, and you never navigate to a screen of your own to show it — AKS presents it as an overlay on the `activity` you pass in.
+
+```kotlin
+// Preload — call ahead of time (e.g. in onCreate) so the paywall is ready to show instantly
+// later. Resolves against "{placeholder}_LOAD" in the AKS portal config, NOT the bare
+// placeholder — see the note below.
+PaywallManager.loadPaywall(placeholder, object : PaywallCallback() {
+    override fun onLoaded(paywallId: String) { }
+    override fun onFailedToLoad(reason: String) { }
+    override fun onReadyToShow(paywallId: String) { }   // not used on this path
+    override fun onFailedToShow(reason: String) { }     // not used on this path
+}, languageCode)
+
+// Show — presents the paywall on `activity`. If it wasn't already loaded, this loads it
+// first and shows it as soon as it's ready, same combined load-then-show convenience as
+// loadAndShowInterstitialAd. Resolves against the BARE placeholder (no "_LOAD" suffix).
+PaywallManager.showPaywall(PlatformActivity(activity), placeholder, object : PaywallCallback() {
+    override fun onLoaded(paywallId: String) { }
+    override fun onFailedToLoad(reason: String) { }
+    override fun onReadyToShow(paywallId: String) { }     // paywall is now on screen
+    override fun onFailedToShow(reason: String) { }       // not eligible, or failed to load
+
+    override fun onPurchaseCompleted(result: PaywallPurchaseResult) {
+        // result.sku, result.product (matched from the paywall's own catalog, nullable),
+        // result.purchaseToken, result.purchaseTimeUtc — grant whatever entitlement this sku
+        // unlocks, e.g.:
+        AppsKitSDK.setRemoveAdsStatus(true)
+    }
+    override fun onPurchaseFailed(message: String) { }
+    override fun onDismissed() { }
+    override fun onRestoreCompleted(results: List<PaywallPurchaseResult>) {
+        // fired if the user tapped the presented paywall's own "Restore" action
+    }
+}, languageCode)
+```
+
+> `loadPaywall` and `showPaywall` resolve **different** portal placement entries for the same `placeholder` string: `loadPaywall` looks up `"{placeholder}_LOAD"` — the same `_LOAD`-suffix preload convention the interstitial format uses internally — while `showPaywall` (and its own eligibility check) resolves the bare `placeholder`. Preloading is optional — `showPaywall` loads on demand if nothing was preloaded — but if you do preload, configure both entries in the AKS portal, since they're allowed to point at different paywall designs.
+>
+> Only `onLoaded`/`onFailedToLoad`/`onReadyToShow`/`onFailedToShow` are `abstract` on `PaywallCallback` — `onPurchaseCompleted`/`onPurchaseFailed`/`onDismissed`/`onRestoreCompleted` are `open` with no-op defaults, so a load-only call site doesn't need to override them.
+
+`languageCode` is optional and, when supplied, is forwarded to the backend so it can localize the paywall's design/copy.
+
+#### Restoring purchases
+
+A standalone entry point for your own "Restore Purchases" row/button, independent of whether any paywall is currently showing:
+
+```kotlin
+PaywallManager.restorePurchases(
+    PlatformContext(context),
+    PlatformActivity(activity),
+    null, // storeType — null resolves to whatever AppsKitSDKApplication.setPlatform() declared
+    object : PaywallResultCallback {
+        override fun onPurchaseCompleted(result: PaywallPurchaseResult) { }   // not invoked on this path
+        override fun onPurchaseFailed(message: String) { }                    // not invoked on this path
+        override fun onRestoreCompleted(results: List<PaywallPurchaseResult>) {
+            // empty list = nothing to restore; otherwise sync your entitlement from each sku
+        }
+    }
+)
+```
+
+`restorePurchases` only ever calls `onRestoreCompleted` — `PaywallResultCallback`'s other two members exist because the same interface also backs a live paywall screen's own purchase reporting internally (see `showPaywall`'s `onPurchaseCompleted`/`onPurchaseFailed` above, which is where those actually surface).
+
+#### Driving entitlement from the result
+
+Neither `onPurchaseCompleted` nor `onRestoreCompleted` changes anything in your app on their own — AKS reports what happened, you decide what it unlocks:
+
+```kotlin
+private fun syncEntitlementFrom(results: List<PaywallPurchaseResult>) {
+    val hasRemoveAds = results.any { it.sku in YOUR_REMOVE_ADS_SKUS }
+    AppsKitSDK.setRemoveAdsStatus(hasRemoveAds)
+    // drive your own subscription/Pro flag the same way, from YOUR_SUBSCRIPTION_SKUS
+}
+```
+
+For a **restore**, treat AKS as the source of truth: a sku missing from `results` means the user doesn't currently hold it, so clear the corresponding entitlement too, not just grant what's present — otherwise a lapsed subscriber who restores stays entitled forever. A single completed **purchase**, on the other hand, is always a positive fact on its own — grant it and leave any other entitlement state untouched.
 
 ---
 
