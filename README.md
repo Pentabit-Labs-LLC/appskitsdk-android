@@ -60,7 +60,7 @@ dependencies {
     implementation("app.cash.sqldelight:android-driver:2.3.2")
 
     // Jetpack Compose — AKS's Feature/Cross-Promotion ad screens, the Configuration
-    // Dashboard, and the Test Suite (§10) are all built with Compose. Pull these in via
+    // Dashboard, and the Test Suite (§11) are all built with Compose. Pull these in via
     // the Compose BOM so versions stay aligned with whatever else in your app uses Compose.
     implementation(platform("androidx.compose:compose-bom:2025.08.01"))
     implementation("androidx.compose.runtime:runtime")
@@ -431,7 +431,7 @@ class HomeActivity : AppsKitSDKBaseActivity() {
 }
 ```
 
-Extending these base classes automatically gives you: ad-network initialization and preloading on first screen, IronSource lifecycle forwarding in `onResume`/`onPause`, session/day-count tracking, an internet-connectivity dialog, optional in-app-update prompts, and `sendAKSEvent(...)` for firing events tied to this screen (see [§7](#7-aks-events-and-logs)). (Adjust's own `onResume`/`onPause` forwarding happens at the `Application` level — see [§5.2](#52-initializing-without-extending-appskitsdkapplication) — not here.)
+Extending these base classes automatically gives you: ad-network initialization and preloading on first screen, IronSource lifecycle forwarding in `onResume`/`onPause`, session/day-count tracking, an internet-connectivity dialog, optional in-app-update prompts, and `sendAKSEvent(...)` for firing events tied to this screen (see [§8](#8-aks-events-and-logs)). (Adjust's own `onResume`/`onPause` forwarding happens at the `Application` level — see [§5.2](#52-initializing-without-extending-appskitsdkapplication) — not here.)
 
 #### Internet connectivity dialog
 
@@ -611,9 +611,13 @@ AdsManager.showFeaturePromotion(activity, placeholder, object : OnFeaturePromoti
 })
 ```
 
-### Paywall
+---
+
+## 7. Paywalls
 
 Paywall is AKS's other house-hosted format (like Feature Promotion) — the paywall's design, copy, pricing layout, and plans are all configured server-side in the AKS portal against the PAYWALLS ad format, and AKS renders the screen and drives the whole purchase flow itself (pricing, plan selection, the actual Google Play / Amazon purchase, and reporting the result back to you). You never call a billing API directly, and you never navigate to a screen of your own to show it — AKS presents it as an overlay on the `activity` you pass in.
+
+### 7.1 Loading and showing
 
 ```kotlin
 // Preload — call ahead of time (e.g. in onCreate) so the paywall is ready to show instantly
@@ -655,7 +659,22 @@ PaywallManager.showPaywall(PlatformActivity(activity), placeholder, object : Pay
 
 `languageCode` is optional and, when supplied, is forwarded to the backend so it can localize the paywall's design/copy.
 
-#### Restoring purchases
+### 7.2 Showing without the cooldown (`showPaywallWithoutDelay`)
+
+`showPaywall` gates on a cooldown between paywall presentations — the AKS portal's `timeDiffBtwPaywalls` (falling back to the older `TIME_DIFFERENCE_TO_REQUEST_PAYWALLS` field for a config that hasn't switched over yet) — measured from the last time a paywall was actually shown (`PaywallManager.markPaywallShown()`, called internally right before presentation). If that interval hasn't elapsed yet, `showPaywall` calls `onFailedToShow` instead of presenting anything, even though a paywall is configured and eligible in every other respect.
+
+For a call site that should always present the paywall the moment it's eligible — regardless of how recently one was last shown (e.g. a dedicated "Upgrade" button, or a hard paywall blocking a specific action) — use `showPaywallWithoutDelay` instead. It takes the exact same parameters as `showPaywall` and behaves identically in every other respect (same placeholder/`_LOAD` resolution, same callbacks, same billing flow):
+
+```kotlin
+PaywallManager.showPaywallWithoutDelay(PlatformActivity(activity), placeholder, object : PaywallCallback() {
+    // same callback surface as showPaywall above — onLoaded/onFailedToLoad/onReadyToShow/
+    // onFailedToShow/onPurchaseCompleted/onPurchaseFailed/onDismissed/onRestoreCompleted
+}, languageCode)
+```
+
+> This only skips the cooldown — it does **not** bypass the rest of eligibility (a scene/id must still be configured for `placeholder` against the PAYWALLS format, and a paywall must still resolve for it). It also still calls `markPaywallShown()` once presented, so the cooldown timer is reset for the next plain `showPaywall` call elsewhere in your app — using this doesn't disable the cooldown globally, it just skips it for this one call.
+
+### 7.3 Restoring purchases
 
 A standalone entry point for your own "Restore Purchases" row/button, independent of whether any paywall is currently showing:
 
@@ -676,7 +695,7 @@ PaywallManager.restorePurchases(
 
 `restorePurchases` only ever calls `onRestoreCompleted` — `PaywallResultCallback`'s other two members exist because the same interface also backs a live paywall screen's own purchase reporting internally (see `showPaywall`'s `onPurchaseCompleted`/`onPurchaseFailed` above, which is where those actually surface).
 
-#### Driving entitlement from the result
+### 7.4 Driving entitlement from the result
 
 Neither `onPurchaseCompleted` nor `onRestoreCompleted` changes anything in your app on their own — AKS reports what happened, you decide what it unlocks:
 
@@ -692,13 +711,13 @@ For a **restore**, treat AKS as the source of truth: a sku missing from `results
 
 ---
 
-## 7. AKS Events and logs
+## 8. AKS Events and logs
 
-### 7.1 Automatic screen events
+### 8.1 Automatic screen events
 
 If your Activity overrides `setScreenNameAndId()` (returning a `Pair<screenId, screenName>`), the base Activity automatically fires a `SCREEN` event in `onCreate()` — you don't need to call anything yourself for that.
 
-### 7.2 Manual events from within an Activity
+### 8.2 Manual events from within an Activity
 
 From inside any Activity extending `AppsKitSDKBaseActivity` / `AppsKitSDKBaseComponentActivity`:
 
@@ -736,7 +755,7 @@ AKSLogManager.log(
 
 Firebase Analytics caps event names at 40 characters, so keep `name` short — especially for `ITEM`/`LIST` events, which append an index/title to the name.
 
-### 7.3 General-purpose logging and events
+### 8.3 General-purpose logging and events
 
 For events outside an Activity's screen scope (services, ViewModels, repositories, etc.), use the plain-`Context` wrapper `AppsKitSDKLogManager`:
 
@@ -766,7 +785,7 @@ AppsKitSDKLogManager.logAarVersion()
 
 `AppsKitSDKLogType`: `INFO`, `ERROR`, `VERBOSE`, `WARNING`, `DESCRIPTION`.
 
-### 7.4 Debug log tags
+### 8.4 Debug log tags
 
 Filter Logcat by:
 
@@ -776,7 +795,7 @@ Filter Logcat by:
 
 ---
 
-## 8. Local preferences (`PreferencesManager`)
+## 9. Local preferences (`PreferencesManager`)
 
 AKS also exposes the simple key-value store it uses internally (backed by `multiplatform-settings`, i.e. `SharedPreferences` under the hood on Android), so you can use it for your own app's lightweight preferences instead of pulling in another storage dependency:
 
@@ -806,13 +825,13 @@ This is the same store AKS uses for its own internal flags (like `REMOVE_ADS`), 
 
 ---
 
-## 9. Local notifications (`AppsKitSDKLocalNotificationManager`)
+## 10. Local notifications (`AppsKitSDKLocalNotificationManager`)
 
 AKS ships a small local-notification toolkit — a queue, a notification builder, and an abstract `BroadcastReceiver` — that you can use to show your own local notifications. AKS does **not** register the receiver in its manifest or schedule anything for you; both of those are on you.
 
-### 9.1 Manifest
+### 10.1 Manifest
 
-Subclass `AppsKitSDKLocalNotificationBroadCastReceiver` (shown in [§9.2](#92-queuing-a-notification)) and declare your subclass as a `<receiver>`, merged into the same `<application>` element from [§2](#2-androidmanifestxml):
+Subclass `AppsKitSDKLocalNotificationBroadCastReceiver` (shown in [§10.2](#102-queuing-a-notification)) and declare your subclass as a `<receiver>`, merged into the same `<application>` element from [§2](#2-androidmanifestxml):
 
 ```xml
 <application
@@ -833,7 +852,7 @@ If you target Android 13+ (API 33), also add the runtime notification permission
 
 `POST_NOTIFICATIONS` is a runtime permission, so you still need to request it from the user (e.g. via `ActivityResultContracts.RequestPermission()`) before notifications will actually post.
 
-### 9.2 Queuing a notification
+### 10.2 Queuing a notification
 
 Subclass `AppsKitSDKLocalNotificationBroadCastReceiver` and implement `checkNotifications()` — your hook to decide whether a notification is due, called every time the receiver fires:
 
@@ -857,9 +876,9 @@ class YourNotificationReceiver : AppsKitSDKLocalNotificationBroadCastReceiver() 
 
 Right after `checkNotifications()` returns, `onReceive` automatically calls `AppsKitSDKLocalNotificationManager.showNotification(context)` — it pops the oldest queued `NotificationModel` and displays it. You don't call `showNotification` yourself in this flow; queuing inside `checkNotifications()` is enough.
 
-> This queued-show path checks `POST_NOTIFICATIONS` itself on Android 13+ and silently skips (logging a line) if it isn't granted, so make sure you've requested it first per [§9.1](#91-manifest).
+> This queued-show path checks `POST_NOTIFICATIONS` itself on Android 13+ and silently skips (logging a line) if it isn't granted, so make sure you've requested it first per [§10.1](#101-manifest).
 
-### 9.3 Scheduling
+### 10.3 Scheduling
 
 AKS doesn't register or trigger this receiver on any schedule — you decide when `onReceive` fires, typically with `AlarmManager`:
 
@@ -889,7 +908,7 @@ class YourNotificationReceiver : AppsKitSDKLocalNotificationBroadCastReceiver() 
 
 > `AlarmManager.setRepeating` is inexact under Doze/battery optimizations — if you need it to fire reliably while idle, reschedule with `setExactAndAllowWhileIdle` on every trigger instead, or move to `WorkManager`'s `PeriodicWorkRequest` (15-minute minimum interval). AKS doesn't prescribe either; pick whichever fits your app. Also note alarms don't survive a device reboot unless you re-register them yourself (e.g. from a `BOOT_COMPLETED` receiver).
 
-### 9.4 Showing a notification directly (no queue)
+### 10.4 Showing a notification directly (no queue)
 
 To post a notification immediately, without going through the queue/receiver flow above:
 
@@ -917,11 +936,11 @@ AppsKitSDKLocalNotificationManager.showNotification(
 )
 ```
 
-Both overloads create the notification channel for you if it doesn't already exist. Unlike the queued path in [§9.2](#92-queuing-a-notification), neither checks `POST_NOTIFICATIONS` itself — request the runtime permission yourself on Android 13+, or the call may silently fail to post.
+Both overloads create the notification channel for you if it doesn't already exist. Unlike the queued path in [§10.2](#102-queuing-a-notification), neither checks `POST_NOTIFICATIONS` itself — request the runtime permission yourself on Android 13+, or the call may silently fail to post.
 
 ---
 
-## 10. The built-in Configuration Dashboard / Test Suite
+## 11. The built-in Configuration Dashboard / Test Suite
 
 AKS bundles a Compose-based diagnostics screen — there's no separate debug build or manifest entry for it; it renders as a full-screen dialog on top of whatever Activity you launch it from. It's useful for checking what AKS thinks is going on (remote config, ad states, consent) without attaching a debugger.
 
@@ -939,7 +958,7 @@ This opens the **AKS Configuration Dashboard**, from which you can check:
 - **Check Configurations** — opens the Test Suite itself (see below).
 - **Placeholder Calls** — a pretty-printed JSON dump of ad call activity per placeholder.
 - **Placeholder Load Stats** — load attempt/success/failure counters per placeholder.
-- **AKS Logs** — the same accumulated log history you'd otherwise read from Logcat (see [§11](#11-debugging-with-aks-logs-ptb_log)), searchable on-screen.
+- **AKS Logs** — the same accumulated log history you'd otherwise read from Logcat (see [§12](#12-debugging-with-aks-logs-ptb_log)), searchable on-screen.
 
 ### The Test Suite
 
@@ -955,9 +974,9 @@ Both calls only need a `PlatformActivity` — AKS reads everything else (ad stat
 
 ---
 
-## 11. Debugging with AKS logs (`PTB_LOG`)
+## 12. Debugging with AKS logs (`PTB_LOG`)
 
-Every log line AKS produces — from `AKSLogManager`/`AppsKitSDKLogManager` calls, ad load/show events, and internal SDK activity — goes to two places at once: Logcat, tagged by category, and the in-memory log accumulator that backs the **AKS Logs** screen in [§10](#10-the-built-in-configuration-dashboard--test-suite).
+Every log line AKS produces — from `AKSLogManager`/`AppsKitSDKLogManager` calls, ad load/show events, and internal SDK activity — goes to two places at once: Logcat, tagged by category, and the in-memory log accumulator that backs the **AKS Logs** screen in [§11](#11-the-built-in-configuration-dashboard--test-suite).
 
 ### Filtering Logcat
 
@@ -969,10 +988,10 @@ adb logcat -s PTB_LOG:* PTB_LOG_ADS:* PTB_LOG_ANALYTICS:*
 
 - `PTB_LOG` — general SDK logs (init sequence, mode banners, lifecycle, errors)
 - `PTB_LOG_ADS` — ad load/show lifecycle for every format
-- `PTB_LOG_ANALYTICS` — events sent to Firebase/MMPs, including every `sendAKSEvent`/`AKSLogManager.log` call from [§7](#7-aks-events-and-logs)
+- `PTB_LOG_ANALYTICS` — events sent to Firebase/MMPs, including every `sendAKSEvent`/`AKSLogManager.log` call from [§8](#8-aks-events-and-logs)
 
 ### Reading logs without Logcat
 
-If you're debugging a release build, a tester's device, or a support ticket where attaching `adb` isn't an option, open the Test Suite's **AKS Logs** screen instead ([§10](#10-the-built-in-configuration-dashboard--test-suite)) — it shows the exact same log lines on-device, with on-screen search, so a tester can scroll/search it directly or screenshot it back to you.
+If you're debugging a release build, a tester's device, or a support ticket where attaching `adb` isn't an option, open the Test Suite's **AKS Logs** screen instead ([§11](#11-the-built-in-configuration-dashboard--test-suite)) — it shows the exact same log lines on-device, with on-screen search, so a tester can scroll/search it directly or screenshot it back to you.
 
-> `AppsKitSDKLogManager.logAarVersion()` (see [§7.3](#73-general-purpose-logging-and-events)) is the fastest way to confirm which AKS AAR version is actually integrated when you suspect a version mismatch — it prints the version banner to `PTB_LOG`.
+> `AppsKitSDKLogManager.logAarVersion()` (see [§8.3](#83-general-purpose-logging-and-events)) is the fastest way to confirm which AKS AAR version is actually integrated when you suspect a version mismatch — it prints the version banner to `PTB_LOG`.
