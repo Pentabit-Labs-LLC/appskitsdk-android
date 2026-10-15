@@ -594,6 +594,48 @@ AdsManager.showTemplatedNative(activity, frameLayout, placeholder, isShowInScrol
 
 `showTemplatedNative` is for placeholders where the native ad's look was designed and assigned **on the AKS portal** rather than in your app's code — there's no `res` param at all, because the layout isn't yours to supply. AKS resolves which portal template applies to this placeholder, fetches it (cached after the first fetch), and renders the native ad with it through the same load/display pipeline `showNative` uses. If no template is assigned to the placeholder, or it can't be fetched, AKS falls back to its own built-in default native design rather than failing the ad — so it's always safe to call, even before a template has been set up on the portal side.
 
+### Icon Ad
+
+Icon Ad is a small 512×512 app icon that you place anywhere in your screen. It rotates through the Cross Promotion icon creatives configured on the AKS portal, optionally animated (shake, rotate, pulse, bounce, wiggle), and tapping it opens the promoted app's store page. It only resolves through the `AKS` network. Requires SDK **8.3.0.0** or higher.
+
+Portal setup: on the app, set **Icon Ad = AKS** under Mediation, then map the placeholder to **Icon Ad → Cross Promotion** in Ad Unit Mapping.
+
+```kotlin
+// iconContainer is a FrameLayout (BannerContainer) you've placed in your screen,
+// at least as big as the size you pass
+AdsManager.showIconAd(activity, iconContainer, placeholder, IconAdSize.MEDIUM, object : IconAdCallback() {
+    override fun onIconAdLoaded(creativeCount: Int) { }
+    override fun onIconAdFailedToLoad(errorMessage: String) { iconContainer.visibility = View.GONE }
+    override fun onIconAdShown(creativeId: Long?) { }      // every displayed icon (once per rotation)
+    override fun onIconAdClicked(creativeId: Long?) { }    // the SDK opens the target URL itself
+    override fun onIconAdFailedToShow(errorMessage: String) { }
+    override fun onIconAdDestroyed() { }
+})
+
+// Optional — fetch and cache the creatives earlier (cached for 30 minutes).
+// showIconAd also loads on its own when needed, so calling load first is not required.
+AdsManager.loadIconAd(placeholder, object : IconAdCallback() { })
+
+// Stop and release it (call from onDestroy, or whenever the view goes away)
+AdsManager.destroyIconAd(iconContainer)
+```
+
+`IconAdSize` — you choose the size on every `showIconAd` call; the SDK draws the icon at that size, centered in your container:
+
+| Size | Rendered at |
+|---|---|
+| `SMALL` | 64 dp |
+| `MEDIUM` | 96 dp |
+| `LARGE` | 128 dp |
+
+The SDK overlays a small "Ad" badge and an (i) button on the icon; the (i) opens the privacy policy.
+
+**Behaviour**
+- Rotation, animation and impression counting pause automatically while the container is detached, hidden, scrolled off screen or the app is in the background, and resume when it is visible again.
+- Each displayed icon reports one Cross Promotion impression (`ad_format = icon_ad`, with the creative id); a tap reports a click.
+- One icon ad per container — calling `showIconAd` again on the same container destroys the previous one first (it receives `onIconAdDestroyed`).
+- Resources are released only when you call `destroyIconAd`, so call it when the screen is destroyed.
+
 ### Feature Promotion
 
 Feature Promotion is AKS's own house-ad format for cross-promoting one feature of your app to users who haven't unlocked it yet — it only resolves through the `AKS` network (not AdMob/MAX/etc.), and the promoted items are configured server-side in the AKS portal, scoped to the placeholder.
