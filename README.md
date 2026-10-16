@@ -620,7 +620,7 @@ AdsManager.loadIconAd(placeholder, object : IconAdCallback() { })
 AdsManager.destroyIconAd(iconContainer)
 ```
 
-`IconAdSize` — you choose the size on every `showIconAd` call; the SDK draws the icon at that size, centered in your container:
+`IconAdSize` — you choose the size on every `showIconAd` call; the SDK fits the icon into that size, centered in your container. About 11% on each side is left free so the pulse / shake / bounce animations are never clipped, so the icon itself is about 77% of the size:
 
 | Size | Rendered at |
 |---|---|
@@ -631,6 +631,7 @@ AdsManager.destroyIconAd(iconContainer)
 The SDK overlays a small "Ad" badge and an (i) button on the icon; the (i) opens the privacy policy.
 
 **Behaviour**
+- Animation timing is set per creative on the portal: **play once** per displayed icon, or **repeat** with a pause (default 3 s), or **loop** continuously with no pause. No SDK call is needed. Older creatives keep the 3 s repeat.
 - Rotation, animation and impression counting pause automatically while the container is detached, hidden, scrolled off screen or the app is in the background, and resume when it is visible again.
 - Each displayed icon reports one Cross Promotion impression (`ad_format = icon_ad`, with the creative id); a tap reports a click.
 - One icon ad per container — calling `showIconAd` again on the same container destroys the previous one first (it receives `onIconAdDestroyed`).
@@ -700,6 +701,15 @@ PaywallManager.showPaywall(PlatformActivity(activity), placeholder, object : Pay
 > Only `onLoaded`/`onFailedToLoad`/`onReadyToShow`/`onFailedToShow` are `abstract` on `PaywallCallback` — `onPurchaseCompleted`/`onPurchaseFailed`/`onDismissed`/`onRestoreCompleted` are `open` with no-op defaults, so a load-only call site doesn't need to override them.
 
 `languageCode` is optional and, when supplied, is forwarded to the backend so it can localize the paywall's design/copy.
+
+**Optional `mode` (draft / published)**
+
+`loadPaywall`, `showPaywall` and `showPaywallWithoutDelay` take an optional `mode: PaywallMode?` — `PaywallMode.DRAFT` or `PaywallMode.PUBLISHED`. When you pass one, AKS adds it as the `mode` query parameter on the paywall request (`v1/paywall-templates/resolve-json?paywallId=…&mode=draft`), so you can preview an unpublished paywall design from the portal in a test build. When you leave it out (the default), no `mode` is sent and the backend decides. Each mode is cached separately, so loading a draft never serves the published copy or the other way round.
+
+```kotlin
+PaywallManager.loadPaywall(placeholder, callback, mode = PaywallMode.DRAFT)
+PaywallManager.showPaywall(PlatformActivity(activity), placeholder, callback, mode = PaywallMode.PUBLISHED)
+```
 
 ### 7.2 Showing without the cooldown (`showPaywallWithoutDelay`)
 
