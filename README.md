@@ -121,23 +121,26 @@ AKS bundles handler code for AdMob, AppLovin MAX, and Chartboost Mediation (Heli
 
 ```kotlin
 dependencies {
-    // ---- AdMob / Google Mobile Ads + mediation adapters ----
-    implementation("com.google.android.gms:play-services-ads:24.4.0")
-    implementation("com.google.ads.mediation:applovin:13.0.1.0")
-    implementation("com.google.ads.mediation:ironsource:8.5.0.1")
-    implementation("com.google.ads.mediation:chartboost:9.8.2.0")
-    implementation("com.google.ads.mediation:vungle:7.4.2.0")
-    implementation("com.google.ads.mediation:facebook:6.18.0.0")
-    implementation("com.google.ads.mediation:mintegral:16.9.71.0")
-    implementation("com.google.ads.mediation:pangle:6.4.0.4.0")
-    implementation("com.google.ads.mediation:unity:4.12.5.0") {
+    // ---- AdMob: Google Mobile Ads "Next Gen" SDK + mediation adapters ----
+    // AKS uses the Next Gen SDK (com.google.android.libraries.ads.mobile.sdk). The legacy
+    // play-services-ads SDK is NOT supported and must not be on the classpath (see the
+    // exclude block below the dependencies).
+    implementation("com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.5.0")
+    implementation("com.google.android.gms:play-services-ads-identifier:18.1.0")
+    implementation("com.google.ads.mediation:applovin:13.6.4.2")
+    implementation("com.google.ads.mediation:inmobi:11.4.1.1")
+    implementation("com.google.ads.mediation:ironsource:9.6.1.0")
+    implementation("com.google.ads.mediation:vungle:7.7.8.1")
+    implementation("com.google.ads.mediation:facebook:6.22.0.1")
+    implementation("com.google.ads.mediation:mintegral:17.1.81.1")
+    implementation("com.google.ads.mediation:pangle:8.3.0.3.0")
+    implementation("com.google.ads.mediation:unity:4.20.1.0") {
         exclude(group = "com.google.android.gms", module = "play-services-cronet")
     }
 
     // ---- AppLovin MAX + adapters ----
     implementation("com.applovin:applovin-sdk:13.3.0")
-    implementation("com.applovin.mediation:google-adapter:+")
-    implementation("com.applovin.mediation:google-ad-manager-adapter:+")
+    // (google-adapter / google-ad-manager-adapter removed: they depend on the legacy AdMob SDK)
     implementation("com.applovin.mediation:ironsource-adapter:8.7.0.0.0")
     implementation("com.applovin.mediation:facebook-adapter:+")
     implementation("com.applovin.mediation:vungle-adapter:+")
@@ -149,7 +152,7 @@ dependencies {
 
     // ---- Chartboost Mediation (Helium) + adapters ----
     implementation("com.chartboost:chartboost-mediation-sdk:4.7.1")
-    implementation("com.chartboost:chartboost-mediation-adapter-admob:4.22.3.0.4")
+    // (chartboost-mediation-adapter-admob / -google-bidding removed: they depend on the legacy AdMob SDK)
     implementation("com.chartboost:chartboost-mediation-adapter-applovin:4.12.0.0.0")
     implementation("com.chartboost:chartboost-mediation-adapter-ironsource:4.7.5.2.0.0")
     implementation("com.chartboost:chartboost-mediation-adapter-vungle:4.7.1.0.0")
@@ -157,6 +160,17 @@ dependencies {
     implementation("com.chartboost:chartboost-mediation-adapter-pangle:4.5.5.0.3.0")
 }
 ```
+
+**Migrating to the AdMob Next Gen SDK.** Add this to your **app-level** `build.gradle.kts` so the legacy AdMob artifacts can never be pulled in transitively by another SDK (the two SDKs can't coexist — duplicate classes):
+
+```kotlin
+configurations.configureEach {
+    exclude(group = "com.google.android.gms", module = "play-services-ads")
+    exclude(group = "com.google.android.gms", module = "play-services-ads-lite")
+}
+```
+
+Also remove any other dependency that still requires the legacy SDK (for example the LevelPlay `admobadapter`, Chartboost's `adapter-admob` / `adapter-google-bidding`, and MAX's `google-adapter` / `google-ad-manager-adapter`), and make sure no code in your app still imports `com.google.android.gms.ads.*`. AdMob rewarded/interstitial/app-open/banner/native all go through the Next Gen SDK inside AKS; nothing changes in how you call them (§6).
 
 If you're certain a given network (e.g. Helium) will never be enabled in your AKS portal config, you can drop its block — just know that AKS's own internal `AdNetwork` failover logic can route to any of ADMOB, GAM, MAX, IRON_SOURCE, or HELIUM per ad format, so trimming this list reduces flexibility on the remote-config side.
 
@@ -174,7 +188,9 @@ AKS's own manifest only declares:
 
 These merge into your app automatically via Gradle's manifest merger — **you don't need to add them yourself.**
 
-What you **do** need to add to your own `AndroidManifest.xml` — both the AdMob App ID `meta-data` tag and the registration of your custom `Application` subclass (see [§5](#5-initializing-the-sdk-and-adsmanager)) go on the same `<application>` element:
+What you **do** need to add to your own `AndroidManifest.xml` is the registration of your custom `Application` subclass (see [§5](#5-initializing-the-sdk-and-adsmanager)) on the `<application>` element.
+
+> **No AdMob App ID in the manifest anymore.** With the Next Gen SDK, AKS passes the AdMob App ID to the SDK at initialization (on a background thread). It comes from the **`ADMOB_APP_ID`** value in your AKS portal mediation config (`ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY`). Set it there, and **delete** the `com.google.android.gms.ads.APPLICATION_ID` `<meta-data>` tag from your manifest. If `ADMOB_APP_ID` is missing, AdMob is not initialized and AKS logs it.
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -182,13 +198,6 @@ What you **do** need to add to your own `AndroidManifest.xml` — both the AdMob
 
     <application
         android:name=".YourApplication">
-
-        <!-- Required if AdMob/GAM is one of your enabled ad networks. Use your own
-             AdMob App ID from the AdMob console — it can't be bundled inside AKS
-             since it's specific to your app. -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY" />
 
         <!-- keep your existing <activity>, <service>, <provider>, etc. declarations here -->
 
@@ -260,11 +269,8 @@ The AKS AAR ships with an **empty** consumer ProGuard file, so none of the rules
 -keep class com.google.firebase.** { *; }
 -dontwarn com.google.android.gms.**
 -dontwarn com.google.firebase.**
--keep class com.google.android.gms.ads.** { *; }
--dontwarn com.google.android.gms.ads.**
--keep class com.google.android.gms.ads.mediation.** { *; }
--dontwarn com.google.android.gms.ads.mediation.**
--keep public class com.google.android.gms.ads.** { public *; }
+-keep class com.google.android.libraries.ads.mobile.sdk.** { *; }
+-dontwarn com.google.android.libraries.ads.mobile.sdk.**
 -keep public class com.google.ads.** { public *; }
 -keep public class com.google.android.gms.common.internal.safeparcel.SafeParcelable {
     public static final * NULL;
@@ -584,7 +590,11 @@ AdsManager.loadNative(activity, placeholder, isShowInScrollView = false, object 
 })
 
 // frameLayout is the BannerContainer that will host the native ad view; res is an
-// optional custom native-ad layout resource (pass null to use AKS's default layout)
+// optional custom native-ad layout resource (pass null to use AKS's default layout).
+// A custom layout must use the AdMob Next Gen views: root
+// com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdView and
+// com.google.android.libraries.ads.mobile.sdk.nativead.MediaView for the media slot
+// (the old com.google.android.gms.ads.nativead.* tags no longer work).
 AdsManager.showNative(activity, frameLayout, placeholder, isShowInScrollView = false, res = null, callback)
 
 // Show the native ad using the design you created for this placeholder in the
@@ -684,9 +694,14 @@ PaywallManager.showPaywall(PlatformActivity(activity), placeholder, object : Pay
 
     override fun onPurchaseCompleted(result: PaywallPurchaseResult) {
         // result.sku, result.product (matched from the paywall's own catalog, nullable),
-        // result.purchaseToken, result.purchaseTimeUtc — grant whatever entitlement this sku
-        // unlocks, e.g.:
+        // result.purchaseToken, result.purchaseTimeUtc, result.originalJson, result.signature
+        // — see §7.4 for every field. Grant whatever entitlement this sku unlocks, e.g.:
         AppsKitSDK.setRemoveAdsStatus(true)
+    }
+    override fun onPurchasesCompleted(results: List<PaywallPurchaseResult>) {
+        // optional: the same event as a list (several items only if the store delivered
+        // more than one purchase in a single update); results.first() is the one
+        // onPurchaseCompleted just received
     }
     override fun onPurchaseFailed(message: String) { }
     override fun onDismissed() { }
@@ -739,15 +754,49 @@ PaywallManager.restorePurchases(
         override fun onPurchaseCompleted(result: PaywallPurchaseResult) { }   // not invoked on this path
         override fun onPurchaseFailed(message: String) { }                    // not invoked on this path
         override fun onRestoreCompleted(results: List<PaywallPurchaseResult>) {
-            // empty list = nothing to restore; otherwise sync your entitlement from each sku
+            // empty list = nothing active to restore; otherwise sync your entitlement from
+            // each result. Every item carries the real purchaseToken, purchaseTimeUtc and
+            // originalJson from the store — the same data a fresh purchase returns (§7.4).
+        }
+        override fun onRestoreCompletedFromCache(results: List<PaywallPurchaseResult>, confirmedAtEpochMs: Long) {
+            // optional: the store could not be reached, so this is the last CONFIRMED restore
+            // (with its full purchase data). If you don't override it, it forwards to
+            // onRestoreCompleted.
         }
     }
 )
 ```
 
+**Restore returns ACTIVE purchases only.** Expired, cancelled/refunded and pending purchases are not returned, and are never an error — if none is active you get an empty list. Per store: Google Play returns purchases in state `PURCHASED`; Amazon returns receipts that have no cancel date; iOS returns StoreKit 2 current entitlements (not revoked, not expired).
+
 `restorePurchases` only ever calls `onRestoreCompleted` — `PaywallResultCallback`'s other two members exist because the same interface also backs a live paywall screen's own purchase reporting internally (see `showPaywall`'s `onPurchaseCompleted`/`onPurchaseFailed` above, which is where those actually surface).
 
-### 7.4 Driving entitlement from the result
+### 7.4 What a purchase / restore result contains
+
+`PaywallPurchaseResult` is identical for a fresh purchase and a restored one:
+
+| Field | Meaning |
+|---|---|
+| `sku` | The purchased product id |
+| `product` | Matching `PaywallProduct` from the paywall's own catalog (nullable) |
+| `purchaseToken` | Google Play purchase token / Amazon `receiptId` / iOS transaction id |
+| `purchaseTimeUtc` | `"yyyy-MM-dd HH:mm:ss"` in UTC (nullable only if the store gave none) |
+| `originalJson` | The store's original purchase JSON: Google Play `Purchase.getOriginalJson()`, Amazon `Receipt.toJSON()`, iOS StoreKit 2 `Transaction.jsonRepresentation`. Nullable (iOS before 15, or StoreKit 2 not answering) |
+| `signature` | Google Play `Purchase.getSignature()` / iOS signed transaction (JWS). `null` on Amazon |
+| `originalTransactionId` | iOS only: StoreKit 2 `originalID`; `null` on Android/Amazon |
+
+The last three fields are new and default to `null`, so existing callbacks compile and behave as before. You can send `purchaseToken` + `originalJson` + `signature` to your backend for server-side verification.
+
+Callbacks:
+
+- `onPurchaseCompleted(result)` — the (first/primary) purchase.
+- `onPurchasesCompleted(results)` — **new**, optional. Fires right after `onPurchaseCompleted` with every purchase the store reported in that event. Google Play can deliver several purchases in one update; the first is the one `onPurchaseCompleted` got. Default is a no-op.
+- `onRestoreCompleted(results)` — every active purchase, with full data (see §7.3).
+- `onRestoreCompletedFromCache(results, confirmedAtEpochMs)` — same shape, served from the last confirmed restore when the store can't be reached.
+
+> **Logging:** never log full purchase tokens or `originalJson` in release builds. `PaywallPurchaseResult.toString()` already prints only the first 6 characters of the token and hides the JSON; use `redactPurchaseToken(token)` for your own logs.
+
+### 7.5 Driving entitlement from the result
 
 Neither `onPurchaseCompleted` nor `onRestoreCompleted` changes anything in your app on their own — AKS reports what happened, you decide what it unlocks:
 
